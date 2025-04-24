@@ -4,7 +4,7 @@ import json
 import pandas as pd
 
 from utils.fetch_reviews import fetch_reviews
-from utils.summarizer import summarize_reviews_cluster
+from utils.summarizer import summarize_reviews
 from utils.visualize import(
     plot_pie, plot_trend,
     plot_rating_by_meal, plot_sentiment_by_price,
@@ -114,7 +114,7 @@ if submitted:
     # ---------- SUMMARY ----------
     st.markdown("### 🤖 AI Summary")
     with st.spinner("Generating summary..."):
-        summary = summarize_reviews_cluster(df, num_clusters=3)
+        summary = summarize_reviews(df, num_clusters=3)
         st.markdown("#### 💡 Key Clustered Insights")
         st.markdown(summary)
 
