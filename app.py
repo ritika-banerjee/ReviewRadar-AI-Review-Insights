@@ -114,7 +114,7 @@ if submitted:
     # ---------- SUMMARY ----------
     st.markdown("### 🤖 AI Summary")
     with st.spinner("Generating summary..."):
-        summary = summarize_reviews_cluster(df, num_clusters=3)
+        summary = summarize_reviews_cluster(df, num_clusters=2)
         st.markdown("#### 💡 Key Clustered Insights")
         st.markdown(summary)
 
