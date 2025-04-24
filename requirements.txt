@@ -4,3 +4,5 @@ transformers
 torch
 sentencepiece
 google-search-results
+scikit-learn
+numpy
