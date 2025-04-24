@@ -1,0 +1,6 @@
+serpapi
+pandas
+transformers
+torch
+sentencepiece
+google-search-results
