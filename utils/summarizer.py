@@ -1,81 +1,49 @@
-from transformers import BartForConditionalGeneration, BartTokenizer
+import pandas as pd
+from sklearn.cluster import KMeans
+from sentence_transformers import SentenceTransformer
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 import torch
-import re
 
-model_name = "facebook/bart-large-cnn"
-tokenizer = BartTokenizer.from_pretrained(model_name)
-model = BartForConditionalGeneration.from_pretrained(model_name)
+# Load models
+embedder = SentenceTransformer('all-MiniLM-L6-v2')
+summ_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-large")
+summ_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-large")
 
-def preprocess_df(df):
-    """
-    Cleans and processes the review text by removing URLs, special characters, and excessive whitespace.
-    """
-    texts = df["review_text"].dropna().astype(str).tolist()
-    
-    cleaned_texts = []
-    for text in texts:
-        text = re.sub(r"http\S+", "", text)  # remove URLs
-        text = re.sub(r"[^a-zA-Z0-9.,!?\\s]", "", text)  # remove special chars
-        text = re.sub(r"\s+", " ", text)  # normalize whitespace
-        cleaned_texts.append(text.strip())
+def preprocess_text(texts):
+    cleaned = []
+    for t in texts:
+        t = t.replace("\n", " ").replace("\\", "").strip()
+        cleaned.append(t)
+    return cleaned
 
-    return cleaned_texts
+def cluster_reviews(df, num_clusters=3):
+    texts = preprocess_text(df["review_text"].dropna().astype(str).tolist())
+    embeddings = embedder.encode(texts, convert_to_tensor=True)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    labels = kmeans.fit_predict(embeddings.cpu().numpy())
 
+    clusters = {}
+    for label, review in zip(labels, texts):
+        clusters.setdefault(label, []).append(review)
 
-def summarize_text(df):
-    """
-    Summarizes all negative reviews in the DataFrame using a pre-trained BART model.
-    Outputs the summary as a list of bullet points.
-    """
-    complaints_df = df[df["sentiment"] == "NEGATIVE"]
-    
-    if complaints_df.empty:
-        print("No negative reviews to summarize.")
-        return "No negative reviews to summarize."
-    
-    # Preprocess all the negative reviews
-    reviews = preprocess_df(complaints_df)
-    
-    # Combine all negative reviews into one string (considering length limits)
-    combined_text = " ".join(reviews)
-    
-    # If the text is too long, we break it into chunks of 1024 tokens
-    max_input_length = 1024
-    chunks = [combined_text[i:i+max_input_length] for i in range(0, len(combined_text), max_input_length)]
-    
-    summaries = []
-    
-    # Summarize each chunk of text
-    for chunk in chunks:
-        inputs = tokenizer(chunk, return_tensors="pt", max_length=max_input_length, truncation=True, padding="longest")
-        summary_ids = model.generate(inputs["input_ids"], max_length=100, min_length=40, num_beams=6, early_stopping=True)
-        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-        summaries.append(summary)
-    
-    # Combine all the individual summaries into one final summary
-    final_summary = " ".join(summaries)
-    
-    # Split the summary into points (separated by periods or newlines)
-    points = final_summary.split(".")
-    points = [point.strip() for point in points if point.strip()]  # Remove empty points
-    
-    # Format as bullet points
-    bullet_points = "\n".join([f"- {point}" for point in points])
-    
-    return bullet_points
+    return clusters
 
+def summarize_cluster(texts, topic=None):
+    input_text = " ".join(texts)[:1024]
+    prompt = f"Summarize the following customer reviews in bullet points:\n{input_text}"
+    inputs = summ_tokenizer(prompt, return_tensors="pt", truncation=True)
+    summary_ids = summ_model.generate(inputs.input_ids, max_length=150, min_length=40, num_beams=4)
+    return summ_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-def summarize_reviews(df):
-    """
-    Summarizes all negative reviews from the DataFrame using the pre-trained BART model.
-    Outputs the result as a list of bullet points.
-    
-    Args:
-        df (pd.DataFrame): DataFrame containing reviews with a 'sentiment' column.
-    
-    Returns:
-        str: Final summary of all negative reviews in bullet points.
-    """
-    summary = summarize_text(df)
-    
-    return summary
+def cluster_based_summary(df, num_clusters=3):
+    clusters = cluster_reviews(df, num_clusters=num_clusters)
+    final_summary = ""
+
+    for cluster_id, reviews in clusters.items():
+        summary = summarize_cluster(reviews)
+        final_summary += f"\n📌 **Cluster {cluster_id + 1} Summary:**\n{summary}\n"
+
+    return final_summary.strip()
+
+def summarize_reviews_cluster(df, num_clusters=3):
+    return cluster_based_summary(df, num_clusters=num_clusters)
