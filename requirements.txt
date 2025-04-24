@@ -7,3 +7,4 @@ google-search-results
 scikit-learn
 numpy
 sentence-transformers
+matplotlib
