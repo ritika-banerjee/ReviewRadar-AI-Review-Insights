@@ -24,13 +24,10 @@ def preprocess_text(texts):
 
 def cluster_reviews(df, num_clusters=3):
     texts = preprocess_text(df["review_text"].dropna().astype(str).tolist())
-    
-    st.write(f"Clustering {len(texts)} reviews into {num_clusters} clusters...")
-    start = time.time()
+
     embeddings = embedder.encode(texts, convert_to_tensor=True)
     kmeans = KMeans(n_clusters=num_clusters, random_state=42)
     labels = kmeans.fit_predict(embeddings.cpu().numpy())
-    st.write(f"Clustering took {time.time() - start:.2f} seconds")
 
     clusters = {}
     for label, review in zip(labels, texts):
@@ -43,21 +40,18 @@ def summarize_cluster(texts):
     texts = texts[:5]  
     input_text = " ".join(texts)
 
-    prompt = f"Summarize the following customer reviews:\n{input_text}"
+    prompt = f"Summarize the following customer reviews and give key insights:\n{input_text}"
     inputs = summ_tokenizer(prompt, return_tensors="pt", truncation=True)
     
-    start = time.time()
     summary_ids = summ_model.generate(inputs.input_ids, max_length=100, min_length=40, num_beams=4)
     summary = summ_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    st.write(f"Summarization took {time.time() - start:.2f} seconds")
     return summary
 
-def cluster_based_summary(df, num_clusters=3):
+def cluster_based_summary(df, num_clusters=2):
     clusters = cluster_reviews(df, num_clusters=num_clusters)
     final_summary = ""
 
     for cluster_id, reviews in clusters.items():
-        st.write(f"Generating summary for Cluster {cluster_id + 1}...")
         summary = summarize_cluster(reviews)
         final_summary += f"\n**Cluster {cluster_id + 1} Summary:**\n{summary}\n\n"
 
